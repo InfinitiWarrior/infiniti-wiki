@@ -1,0 +1,316 @@
+---
+import BaseLayout from './BaseLayout.astro'
+
+interface Heading {
+  depth: number
+  slug: string
+  text: string
+}
+
+interface ChapterMeta {
+  part: number
+  chapter: number
+  title: string
+  description: string
+}
+
+interface Props {
+  title: string
+  description?: string
+  headings: Heading[]
+  prev?: ChapterMeta & { slug: string }
+  next?: ChapterMeta & { slug: string }
+  part: string
+  chapter: number
+}
+
+const { title, description, headings, prev, next, part, chapter } = Astro.props
+
+const toc = headings.filter(h => h.depth === 2 || h.depth === 3)
+---
+
+<BaseLayout title={title} description={description}>
+  <nav class="topnav">
+    <a href="/" class="topnav-logo">
+      <span class="topnav-logo-mark">∞</span>
+      <span class="topnav-logo-text">Infiniti's Wiki</span>
+    </a>
+    <div class="topnav-right">
+      <a href="/" class="topnav-link">Index</a>
+      <a href="https://portfolio.infinitiwarrior.com" class="topnav-link" target="_blank">Portfolio ↗</a>
+    </div>
+  </nav>
+
+  <div class="chapter-shell">
+
+    <aside class="sidebar">
+      <div class="sidebar-inner">
+        <div class="sidebar-part">Part {chapter < 10 ? '0' + Math.ceil(chapter / 3) : Math.ceil(chapter / 3)} — {part}</div>
+        <div class="sidebar-chapter-num">{String(chapter).padStart(2, '0')}</div>
+        <div class="sidebar-chapter-title">{title}</div>
+
+        <nav class="toc" aria-label="Table of contents">
+          {toc.map(h => (
+            <a
+              href={`#${h.slug}`}
+              class={`toc-item toc-depth-${h.depth}`}
+            >
+              {h.text}
+            </a>
+          ))}
+        </nav>
+      </div>
+    </aside>
+
+    <main class="chapter-main">
+      <header class="chapter-header">
+        <div class="chapter-eyebrow">
+          <span class="chapter-part-label">{part}</span>
+          <span class="chapter-divider">·</span>
+          <span class="chapter-num">Chapter {chapter}</span>
+        </div>
+        <h1 class="chapter-title">{title}</h1>
+        {description && <p class="chapter-description">{description}</p>}
+      </header>
+
+      <article class="prose">
+        <slot />
+      </article>
+
+      <nav class="chapter-nav">
+        {prev ? (
+          <a href={`/chapters/${prev.slug}`} class="chapter-nav-item chapter-nav-prev">
+            <span class="chapter-nav-label">← Previous</span>
+            <span class="chapter-nav-title">{prev.title}</span>
+          </a>
+        ) : <div />}
+        {next ? (
+          <a href={`/chapters/${next.slug}`} class="chapter-nav-item chapter-nav-next">
+            <span class="chapter-nav-label">Next →</span>
+            <span class="chapter-nav-title">{next.title}</span>
+          </a>
+        ) : <div />}
+      </nav>
+    </main>
+
+  </div>
+</BaseLayout>
+
+<script>
+  const items = document.querySelectorAll<HTMLAnchorElement>('.toc-item')
+  const headings = document.querySelectorAll<HTMLElement>('h2[id], h3[id]')
+
+  const observer = new IntersectionObserver(
+    entries => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          items.forEach(i => i.classList.remove('active'))
+          const active = document.querySelector(`.toc-item[href="#${entry.target.id}"]`)
+          active?.classList.add('active')
+        }
+      })
+    },
+    { rootMargin: '-10% 0px -80% 0px' }
+  )
+
+  headings.forEach(h => observer.observe(h))
+</script>
+
+<style>
+  .topnav {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 100;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 1.5rem;
+    background: rgba(14,14,14,0.92);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .topnav-logo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .topnav-logo-mark {
+    font-size: 18px;
+    color: var(--color-accent);
+    line-height: 1;
+  }
+  .topnav-logo-text {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--color-text);
+    letter-spacing: 0.03em;
+  }
+
+  .topnav-right { display: flex; gap: 0.75rem; align-items: center; }
+  .topnav-link {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--color-accent);
+    letter-spacing: 0.04em;
+    border: 1px solid rgba(200,185,154,0.3);
+    padding: 4px 12px;
+    border-radius: 3px;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .topnav-link:hover {
+    background: var(--color-accent-dim);
+    border-color: rgba(200,185,154,0.6);
+  }
+
+  .chapter-shell {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    min-height: 100vh;
+    padding-top: 52px;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  .sidebar {
+    border-right: 1px solid var(--color-border);
+    position: relative;
+  }
+  .sidebar-inner {
+    position: sticky;
+    top: 52px;
+    padding: 2.5rem 1.5rem 2.5rem 2rem;
+    max-height: calc(100vh - 52px);
+    overflow-y: auto;
+  }
+
+  .sidebar-part {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--color-muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 0.75rem;
+  }
+  .sidebar-chapter-num {
+    font-family: var(--font-serif);
+    font-size: 3rem;
+    color: var(--color-muted);
+    line-height: 1;
+    margin-bottom: 0.5rem;
+    user-select: none;
+  }
+  .sidebar-chapter-title {
+    font-family: var(--font-sans);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--color-muted);
+    line-height: 1.4;
+    margin-bottom: 2rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .toc { display: flex; flex-direction: column; gap: 2px; }
+  .toc-item {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--color-faint);
+    letter-spacing: 0.02em;
+    padding: 4px 8px;
+    border-radius: 3px;
+    border-left: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s;
+    line-height: 1.5;
+  }
+  .toc-item:hover { color: var(--color-muted); }
+  .toc-item.active {
+    color: var(--color-accent);
+    border-left-color: var(--color-accent);
+  }
+  .toc-depth-3 { padding-left: 1.25rem; }
+
+  .chapter-main {
+    padding: 3.5rem 3rem 6rem;
+    max-width: 740px;
+  }
+
+  .chapter-header { margin-bottom: 3rem; }
+
+  .chapter-eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--color-muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 1rem;
+  }
+  .chapter-divider { color: var(--color-border-hover); }
+  .chapter-num { color: var(--color-accent); }
+
+  .chapter-title {
+    font-family: var(--font-serif);
+    font-size: clamp(2rem, 4vw, 2.8rem);
+    font-weight: 400;
+    line-height: 1.15;
+    color: var(--color-text);
+    margin-bottom: 1rem;
+  }
+
+  .chapter-description {
+    font-size: 1.05rem;
+    color: var(--color-muted);
+    line-height: 1.75;
+    border-left: 2px solid var(--color-border);
+    padding-left: 1.25rem;
+  }
+
+  .chapter-nav {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-top: 4rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--color-border);
+  }
+  .chapter-nav-item {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding: 1rem;
+    border: 1px solid var(--color-border);
+    border-radius: 4px;
+    transition: border-color 0.15s;
+  }
+  .chapter-nav-item:hover { border-color: var(--color-border-hover); }
+  .chapter-nav-next { text-align: right; }
+  .chapter-nav-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--color-faint);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+  .chapter-nav-title {
+    font-family: var(--font-serif);
+    font-size: 1rem;
+    color: var(--color-muted);
+  }
+
+  @media (max-width: 768px) {
+    .chapter-shell {
+      grid-template-columns: 1fr;
+    }
+    .sidebar {
+      display: none;
+    }
+    .chapter-main {
+      padding: 2rem 1.25rem 4rem;
+    }
+  }
+</style>

@@ -1,0 +1,81 @@
+---
+interface Props {
+  variant?: 'note' | 'warning' | 'definition' | 'insight'
+  title?: string
+}
+
+const { variant = 'note', title } = Astro.props
+
+const defaults: Record<string, string> = {
+  note: 'Note',
+  warning: 'Watch out',
+  definition: 'Definition',
+  insight: 'Key insight',
+}
+
+const label = title ?? defaults[variant]
+---
+
+<aside class={`callout callout-${variant}`}>
+  <div class="callout-label">{label}</div>
+  <div class="callout-body">
+    <slot />
+  </div>
+</aside>
+
+<style>
+  .callout {
+    border-radius: 4px;
+    border-left-width: 2px;
+    border-left-style: solid;
+    padding: 1rem 1.25rem;
+    margin: 1.75rem 0;
+  }
+
+  .callout-note {
+    background: var(--color-note);
+    border-left-color: var(--color-note-border);
+  }
+  .callout-warning {
+    background: var(--color-warning);
+    border-left-color: var(--color-warning-border);
+  }
+  .callout-insight {
+    background: var(--color-insight);
+    border-left-color: var(--color-insight-border);
+  }
+  .callout-definition {
+    background: var(--color-definition);
+    border-left-color: var(--color-definition-border);
+  }
+
+  .callout-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 0.5rem;
+  }
+
+  .callout-note .callout-label    { color: var(--color-note-text); }
+  .callout-warning .callout-label { color: var(--color-warning-text); }
+  .callout-insight .callout-label { color: var(--color-insight-text); }
+  .callout-definition .callout-label { color: var(--color-definition-text); }
+
+  .callout-body {
+    font-size: 0.9375rem;
+    color: var(--color-muted);
+    line-height: 1.7;
+  }
+
+  .callout-body :global(p) { margin-bottom: 0; }
+  .callout-body :global(p + p) { margin-top: 0.75rem; }
+  .callout-body :global(code) {
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+    background: rgba(255,255,255,0.06);
+    padding: 1px 5px;
+    border-radius: 3px;
+  }
+</style>

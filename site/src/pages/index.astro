@@ -1,0 +1,289 @@
+---
+import { getCollection } from 'astro:content'
+import BaseLayout from '../layouts/BaseLayout.astro'
+
+const allChapters = await getCollection('chapters', ({ data }) => !data.draft)
+const sorted = allChapters.sort((a, b) => a.data.chapter - b.data.chapter)
+
+const parts = sorted.reduce((acc, chapter) => {
+  const key = chapter.data.part
+  if (!acc[key]) acc[key] = { title: chapter.data.partTitle, chapters: [] }
+  acc[key].chapters.push(chapter)
+  return acc
+}, {} as Record<number, { title: string; chapters: typeof sorted }>)
+---
+
+<BaseLayout title="Infiniti's Wiki" description="Technical writing on infrastructure, security, and software by Daniel Axelson.">
+
+  <nav class="topnav">
+    <div class="topnav-logo">
+      <span class="logo-mark">∞</span>
+      <span class="logo-text">Infiniti's Wiki</span>
+    </div>
+    <div class="topnav-right">
+      <a href="https://portfolio.infinitiwarrior.com" target="_blank" class="topnav-link">Portfolio ↗</a>
+    </div>
+  </nav>
+
+  <main>
+    <section class="hero">
+      <div class="hero-inner">
+        <p class="hero-eyebrow">Daniel Axelson · Oslo, Norway</p>
+        <h1 class="hero-title">
+          Technical writing.<br />
+          <em>Explained properly.</em>
+        </h1>
+        <p class="hero-body">
+          A handbook on infrastructure, security, and software — written from
+          direct experience, not textbooks. Every concept is explained from
+          first principles, with diagrams, and without skipping the parts that
+          are actually hard.
+        </p>
+        <div class="hero-meta">
+          <span class="hero-meta-item">{sorted.length} chapter{sorted.length !== 1 ? 's' : ''}</span>
+          <span class="hero-meta-sep">·</span>
+          <span class="hero-meta-item">{Object.keys(parts).length} parts</span>
+          <span class="hero-meta-sep">·</span>
+          <span class="hero-meta-item">ongoing</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="index">
+      <div class="index-inner">
+        {Object.entries(parts).map(([partNum, part]) => (
+          <div class="part">
+            <div class="part-header">
+              <span class="part-num">Part {String(partNum).padStart(2, '0')}</span>
+              <h2 class="part-title">{part.title}</h2>
+            </div>
+            <div class="chapter-list">
+              {part.chapters.map(chapter => (
+                <a href={`/chapters/${chapter.id.replace(/\.mdx$/, '')}`} class="chapter-card">
+                  <span class="chapter-card-num">{String(chapter.data.chapter).padStart(2, '0')}</span>
+                  <div class="chapter-card-body">
+                    <span class="chapter-card-title">{chapter.data.title}</span>
+                    <span class="chapter-card-desc">{chapter.data.description}</span>
+                  </div>
+                  <span class="chapter-card-arrow">→</span>
+                </a>
+              ))}
+            </div>
+          </div>
+        ))}
+
+        {sorted.length === 0 && (
+          <p class="empty">No chapters published yet.</p>
+        )}
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <span class="footer-copy">© 2026 Daniel Axelson</span>
+    <div class="footer-links">
+      <a href="https://github.com/InfinitiWarrior" target="_blank">GitHub</a>
+      <a href="https://portfolio.infinitiwarrior.com" target="_blank">Portfolio</a>
+      <a href="mailto:infinitiwarrior@infinitiwarrior.com">Email</a>
+    </div>
+  </footer>
+
+</BaseLayout>
+
+<style>
+  .topnav {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 100;
+    height: 52px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 2rem;
+    background: rgba(14,14,14,0.92);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--color-border);
+  }
+  .topnav-logo { display: flex; align-items: center; gap: 8px; }
+  .logo-mark { font-size: 20px; color: var(--color-accent); line-height: 1; }
+  .logo-text {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--color-text);
+    letter-spacing: 0.03em;
+  }
+  .topnav-right { display: flex; gap: 1.5rem; }
+  .topnav-link {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--color-accent);
+    letter-spacing: 0.04em;
+    border: 1px solid rgba(200,185,154,0.3);
+    padding: 4px 12px;
+    border-radius: 3px;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .topnav-link:hover {
+    background: var(--color-accent-dim);
+    border-color: rgba(200,185,154,0.6);
+  }
+
+  .hero {
+    padding-top: 52px;
+    border-bottom: 1px solid var(--color-border);
+  }
+  .hero-inner {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 7rem 2rem 5rem;
+  }
+  .hero-eyebrow {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--color-muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    margin-bottom: 1.25rem;
+  }
+  .hero-title {
+    font-family: var(--font-serif);
+    font-size: clamp(2.5rem, 6vw, 4rem);
+    font-weight: 400;
+    line-height: 1.1;
+    color: var(--color-text);
+    margin-bottom: 1.5rem;
+  }
+  .hero-title em { font-style: italic; color: var(--color-accent); }
+  .hero-body {
+    font-size: 1.05rem;
+    color: var(--color-text);
+    opacity: 0.72;
+    line-height: 1.8;
+    max-width: 600px;
+    margin-bottom: 2rem;
+  }
+  .hero-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--color-muted);
+    letter-spacing: 0.06em;
+  }
+  .hero-meta-sep { color: var(--color-border-hover); }
+
+  .index { padding: 0 0 6rem; }
+  .index-inner {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 0 2rem;
+  }
+
+  .part { padding: 3.5rem 0; border-bottom: 1px solid var(--color-border); }
+  .part:last-child { border-bottom: none; }
+
+  .part-header {
+    display: flex;
+    align-items: baseline;
+    gap: 1rem;
+    margin-bottom: 1.25rem;
+  }
+  .part-num {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--color-accent);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    flex-shrink: 0;
+    opacity: 0.8;
+  }
+  .part-title {
+    font-family: var(--font-serif);
+    font-size: 1.5rem;
+    font-weight: 400;
+    color: var(--color-text);
+    opacity: 0.55;
+  }
+
+  .chapter-list { display: flex; flex-direction: column; gap: 2px; }
+
+  .chapter-card {
+    display: grid;
+    grid-template-columns: 40px 1fr 24px;
+    align-items: start;
+    gap: 1rem;
+    padding: 1rem 0.75rem;
+    border-radius: 4px;
+    border: 1px solid transparent;
+    transition: background 0.12s, border-color 0.12s;
+    cursor: pointer;
+  }
+  .chapter-card:hover {
+    background: var(--color-surface);
+    border-color: var(--color-border-hover);
+  }
+  .chapter-card:hover .chapter-card-arrow { color: var(--color-accent); }
+  .chapter-card:hover .chapter-card-title { color: var(--color-accent); }
+
+  .chapter-card-num {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--color-muted);
+    padding-top: 2px;
+  }
+  .chapter-card-body { display: flex; flex-direction: column; gap: 4px; }
+  .chapter-card-title {
+    font-family: var(--font-sans);
+    font-size: 0.9375rem;
+    font-weight: 500;
+    color: var(--color-text);
+    transition: color 0.12s;
+    line-height: 1.4;
+  }
+  .chapter-card-desc {
+    font-size: 13px;
+    color: var(--color-muted);
+    line-height: 1.55;
+  }
+  .chapter-card-arrow {
+    font-family: var(--font-mono);
+    font-size: 14px;
+    color: var(--color-faint);
+    transition: color 0.12s;
+    padding-top: 2px;
+  }
+
+  .empty {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--color-muted);
+    padding: 3rem 0;
+  }
+
+  .footer {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: 2rem 2rem 3rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-top: 1px solid var(--color-border);
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+  .footer-copy {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--color-muted);
+  }
+  .footer-links { display: flex; gap: 1.5rem; }
+  .footer-links a {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--color-muted);
+    transition: color 0.15s;
+  }
+  .footer-links a:hover { color: var(--color-text); }
+</style>
