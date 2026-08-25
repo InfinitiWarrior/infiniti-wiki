@@ -1,16 +1,27 @@
 ---
-import { getCollection } from 'astro:content'
 import BaseLayout from '../layouts/BaseLayout.astro'
 
-const allChapters = await getCollection('chapters', ({ data }) => !data.draft)
-const sorted = allChapters.sort((a, b) => a.data.chapter - b.data.chapter)
-
-const parts = sorted.reduce((acc, chapter) => {
-  const key = chapter.data.part
-  if (!acc[key]) acc[key] = { title: chapter.data.partTitle, chapters: [] }
-  acc[key].chapters.push(chapter)
-  return acc
-}, {} as Record<number, { title: string; chapters: typeof sorted }>)
+const parts = [
+  {
+    num: 1,
+    title: 'Security Engineering',
+    chapters: [
+      {
+        chapter: 1,
+        slug: 'mdm-internals',
+        title: 'Microsoft Device Management: Internals',
+        description: "How Microsoft's device management stack actually works, from the enrollment protocol and identity layer down to TPM key storage, BitLocker key hierarchies, and why reinstalling your OS doesn't get you out.",
+      },
+      {
+        chapter: 2,
+        slug: 'siem-architecture',
+        title: 'SIEM Architecture: Internals',
+        description: "How a security event actually moves from a process on an endpoint to an analyst's screen: generation, collection, parsing, storage, detection, alerting, investigation, and response, Splunk and Elastic compared at each layer, and where the whole model breaks under load.",
+      },
+    ],
+  },
+]
+const totalChapters = parts.reduce((n, p) => n + p.chapters.length, 0)
 ---
 
 <BaseLayout title="Infiniti's Wiki" description="Technical writing on infrastructure, security, and software by Daniel Axelson.">
@@ -28,21 +39,21 @@ const parts = sorted.reduce((acc, chapter) => {
   <main>
     <section class="hero">
       <div class="hero-inner">
-        <p class="hero-eyebrow">Infiniti Warrior - Norway</p>
+        <p class="hero-eyebrow">Infiniti Warrior · Norway</p>
         <h1 class="hero-title">
           Technical writing.<br />
           <em>Explained properly.</em>
         </h1>
         <p class="hero-body">
-          A handbook on infrastructure, security, and software — written from
+          A handbook on infrastructure, security, and software, written from
           direct experience, not textbooks. Every concept is explained from
           first principles, with diagrams, and without skipping the parts that
           are actually hard.
         </p>
         <div class="hero-meta">
-          <span class="hero-meta-item">{sorted.length} chapter{sorted.length !== 1 ? 's' : ''}</span>
+          <span class="hero-meta-item">{totalChapters} chapter{totalChapters !== 1 ? 's' : ''}</span>
           <span class="hero-meta-sep">·</span>
-          <span class="hero-meta-item">{Object.keys(parts).length} parts</span>
+          <span class="hero-meta-item">{parts.length} parts</span>
           <span class="hero-meta-sep">·</span>
           <span class="hero-meta-item">ongoing</span>
         </div>
@@ -51,19 +62,19 @@ const parts = sorted.reduce((acc, chapter) => {
 
     <section class="index">
       <div class="index-inner">
-        {Object.entries(parts).map(([partNum, part]) => (
+        {parts.map(part => (
           <div class="part">
             <div class="part-header">
-              <span class="part-num">Part {String(partNum).padStart(2, '0')}</span>
+              <span class="part-num">Part {String(part.num).padStart(2, '0')}</span>
               <h2 class="part-title">{part.title}</h2>
             </div>
             <div class="chapter-list">
               {part.chapters.map(chapter => (
-                <a href={`/chapters/${chapter.id.replace(/\.mdx$/, '')}`} class="chapter-card">
-                  <span class="chapter-card-num">{String(chapter.data.chapter).padStart(2, '0')}</span>
+                <a href={`/chapters/${chapter.slug}`} class="chapter-card">
+                  <span class="chapter-card-num">{String(chapter.chapter).padStart(2, '0')}</span>
                   <div class="chapter-card-body">
-                    <span class="chapter-card-title">{chapter.data.title}</span>
-                    <span class="chapter-card-desc">{chapter.data.description}</span>
+                    <span class="chapter-card-title">{chapter.title}</span>
+                    <span class="chapter-card-desc">{chapter.description}</span>
                   </div>
                   <span class="chapter-card-arrow">→</span>
                 </a>
@@ -72,7 +83,7 @@ const parts = sorted.reduce((acc, chapter) => {
           </div>
         ))}
 
-        {sorted.length === 0 && (
+        {totalChapters === 0 && (
           <p class="empty">No chapters published yet.</p>
         )}
       </div>

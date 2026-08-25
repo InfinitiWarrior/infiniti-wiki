@@ -1,0 +1,393 @@
+---
+import ChapterLayout from '../../layouts/ChapterLayout.astro'
+import Callout from '../../components/Callout.astro'
+import Diagram from '../../components/Diagram.astro'
+
+const title = 'Microsoft Device Management: Internals'
+const description = "How Microsoft's device management stack actually works, from the enrollment protocol and identity layer down to TPM key storage, BitLocker key hierarchies, and why reinstalling your OS doesn't get you out."
+
+const headings = [
+  { depth: 2, slug: 'the-stack', text: 'The Stack' },
+  { depth: 2, slug: 'enrollment-how-each-device-type-gets-pulled-in', text: 'Enrollment: How Each Device Type Gets Pulled In' },
+  { depth: 3, slug: 'windows-autopilot-and-manual-enrollment', text: 'Windows: Autopilot and Manual Enrollment' },
+  { depth: 3, slug: 'ios-apple-business-manager-and-dep', text: 'iOS: Apple Business Manager and DEP' },
+  { depth: 3, slug: 'android-android-enterprise', text: 'Android: Android Enterprise' },
+  { depth: 3, slug: 'windows-server-azure-arc', text: 'Windows Server: Azure Arc' },
+  { depth: 2, slug: 'the-identity-layer-entra-id-ad-and-hybrid-join', text: 'The Identity Layer: Entra ID, AD, and Hybrid Join' },
+  { depth: 2, slug: 'sccm-mecm-and-co-management', text: 'SCCM / MECM and Co-Management' },
+  { depth: 2, slug: 'why-reinstalling-the-os-doesnt-help', text: "Why Reinstalling the OS Doesn't Help" },
+  { depth: 3, slug: 'the-autopilot-hash', text: 'The Autopilot Hash' },
+  { depth: 3, slug: 'tpm-bound-enrollment-certificates', text: 'TPM-Bound Enrollment Certificates' },
+  { depth: 3, slug: 'dfci-device-firmware-configuration-interface', text: 'DFCI: Device Firmware Configuration Interface' },
+  { depth: 2, slug: 'memory-and-storage-what-gets-written-where', text: 'Memory and Storage: What Gets Written Where' },
+  { depth: 3, slug: 'tpm-platform-configuration-registers', text: 'TPM Platform Configuration Registers' },
+  { depth: 3, slug: 'bitlocker-key-hierarchy', text: 'BitLocker Key Hierarchy' },
+  { depth: 3, slug: 'encryption-algorithms', text: 'Encryption Algorithms' },
+  { depth: 3, slug: 'what-lives-in-ram-during-a-managed-session', text: 'What Lives in RAM During a Managed Session' },
+  { depth: 2, slug: 'mdm-vs-rootkit-the-honest-comparison', text: 'MDM vs Rootkit: The Honest Comparison' },
+  { depth: 2, slug: 'why-an-attacker-cant-easily-weaponize-mdm-and-where-they-can', text: "Why an Attacker Can't Easily Weaponize MDM (and Where They Can)" },
+  { depth: 3, slug: 'the-single-enrollment-constraint', text: 'The Single Enrollment Constraint' },
+  { depth: 3, slug: 'credential-requirement', text: 'Credential Requirement' },
+  { depth: 3, slug: 'the-rogue-tenant-attack', text: 'The Rogue Tenant Attack' },
+  { depth: 3, slug: 'arc-and-the-server-attack-surface', text: 'Arc and the Server Attack Surface' },
+  { depth: 2, slug: 'enrollment-errors-and-diagnostics', text: 'Enrollment Errors and Diagnostics' },
+  { depth: 3, slug: 'windows-enrollment', text: 'Windows Enrollment' },
+  { depth: 3, slug: 'autopilot', text: 'Autopilot' },
+  { depth: 3, slug: 'hybrid-join', text: 'Hybrid Join' },
+  { depth: 3, slug: 'tpm-attestation-failures', text: 'TPM Attestation Failures' },
+  { depth: 3, slug: 'ios-common-failures', text: 'iOS: Common Failures' },
+  { depth: 2, slug: 'the-policy-pipeline', text: 'The Policy Pipeline' },
+]
+---
+
+<ChapterLayout title={title} description={description} headings={headings} part="Security Engineering" chapter={1} next={{ part: 1, chapter: 2, title: 'SIEM Architecture: Internals', description: '', slug: 'siem-architecture' }}>
+
+  <p>This chapter explains how it works: the enrollment protocol, the identity layer, what gets written to the TPM, why reinstalling your OS doesn't escape it, and why the line between a corporate management tool and a rootkit is thinner than vendors admit.</p>
+
+  <h2 id="the-stack">The Stack</h2>
+
+  <p>"Microsoft Device Management" is not a single product. It is a collection of services, protocols, and agents that together form a management plane over every device category Microsoft supports.</p>
+
+  <table>
+    <thead><tr><th>Component</th><th>Role</th><th>Device scope</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Intune</strong></td><td>Cloud-native MDM/MAM engine</td><td>Windows, iOS, Android, macOS</td></tr>
+      <tr><td><strong>Entra ID</strong></td><td>Identity and trust anchor</td><td>All</td></tr>
+      <tr><td><strong>SCCM / MECM</strong></td><td>On-prem PC management</td><td>Windows, some Linux</td></tr>
+      <tr><td><strong>Azure Arc</strong></td><td>Extends management to servers</td><td>Windows Server, Linux Server</td></tr>
+      <tr><td><strong>Autopilot</strong></td><td>Zero-touch provisioning</td><td>Windows</td></tr>
+      <tr><td><strong>Apple DEP / ABM</strong></td><td>Zero-touch provisioning</td><td>iOS, macOS</td></tr>
+      <tr><td><strong>Android Enterprise</strong></td><td>Managed Android profiles</td><td>Android</td></tr>
+      <tr><td><strong>Co-management</strong></td><td>Simultaneous Intune + SCCM</td><td>Windows</td></tr>
+      <tr><td><strong>Defender for Endpoint</strong></td><td>EDR, integrates with compliance</td><td>All</td></tr>
+    </tbody>
+  </table>
+
+  <p>These components don't operate independently. Entra ID is the identity foundation everything else builds on. Intune is the policy engine. SCCM is the legacy heavy-lifter. Arc extends the model to infrastructure that wasn't designed for cloud management.</p>
+
+  <Diagram caption="The full Microsoft Device Management stack. Entra ID anchors identity across all layers. On-premises AD syncs upward via Entra Connect. Devices receive policy from the cloud or from SCCM depending on join state and co-management configuration." alt="Microsoft Device Management stack overview">
+    <img src="/diagrams/stack-overview.svg" style="max-width: 100%; height: auto;" />
+  </Diagram>
+
+  <h2 id="enrollment-how-each-device-type-gets-pulled-in">Enrollment: How Each Device Type Gets Pulled In</h2>
+
+  <p>Enrollment is the process by which a device registers itself with the management tenant and receives its management credential. Everything downstream (policy application, compliance reporting, remote wipe) depends on this step completing successfully. The mechanism differs significantly by device type.</p>
+
+  <h3 id="windows-autopilot-and-manual-enrollment">Windows: Autopilot and Manual Enrollment</h3>
+
+  <p><strong>Manual enrollment</strong> requires a user action: Settings → Accounts → Access work or school. Windows contacts the Entra ID discovery endpoint at <code>enterpriseregistration.windows.net</code>, authenticates the user, and receives an MDM enrollment URL. It contacts that endpoint, performs a certificate exchange, and installs the MDM management agent. Three artifacts are written to the device:</p>
+
+  <ul>
+    <li>An enrollment certificate, with its private key TPM-bound on capable hardware</li>
+    <li>The MDM agent service: <code>dmwappushsvc</code> and <code>MDMService</code></li>
+    <li>Registry state under <code>HKLM\SOFTWARE\Microsoft\Enrollments\</code></li>
+  </ul>
+
+  <p><strong>Autopilot enrollment</strong> removes the user action requirement entirely. The OEM collects a hardware hash (a fingerprint of the device's hardware identifiers) and uploads it to the tenant before the device ships. The hash is derived from the device serial number, a TPM-derived 4K hardware hash, the primary NIC MAC address, and the Windows OS product ID.</p>
+
+  <p>When the device boots and reaches OOBE with internet access, Windows sends this hash to Microsoft's Autopilot service. The service matches it to a tenant, applies the Autopilot profile, and begins enrollment before any user interaction has occurred. This is the mechanism that makes a clean OS reinstall insufficient: the hash is registered against the hardware, not the software. Reinstall triggers OOBE, OOBE calls Autopilot, Autopilot re-enrolls.</p>
+
+  <Callout variant="warning">
+    The only exits from Autopilot enrollment are: a tenant admin removes the hardware hash from the tenant, or the device completes OOBE without internet access, after which it won't function on the corporate network. There is no user-accessible opt-out.
+  </Callout>
+
+  <h3 id="ios-apple-business-manager-and-dep">iOS: Apple Business Manager and DEP</h3>
+
+  <p>Apple devices use Apple Business Manager (ABM) combined with Apple's Device Enrollment Program (DEP). The structure is identical to Autopilot: serial numbers are registered in ABM, and on first activation the device contacts Apple's servers, identifies the associated MDM server (Intune), and enrolls automatically.</p>
+
+  <p>The enrollment protocol for iOS is Apple's own MDM protocol, distinct from OMA-DM. Intune translates between its policy model and the Apple protocol via an Apple MDM Push Certificate (a certificate issued by Apple that authorizes Intune to send push notifications and management commands to Apple devices). This certificate expires annually and must be renewed with the same Apple ID it was created with. Letting it expire breaks management of all enrolled Apple devices simultaneously.</p>
+
+  <table>
+    <thead><tr><th>Enrollment type</th><th>User data wiped</th><th>Management depth</th><th>Use case</th></tr></thead>
+    <tbody>
+      <tr><td>Device enrollment</td><td>No</td><td>Full device</td><td>Corporate-owned personal use</td></tr>
+      <tr><td>Supervised enrollment</td><td>Yes</td><td>Deep (kiosk, always-on VPN)</td><td>Dedicated or shared devices</td></tr>
+      <tr><td>User enrollment</td><td>No</td><td>Work partition only</td><td>BYOD</td></tr>
+      <tr><td>Web-based enrollment</td><td>No</td><td>Limited</td><td>Lightweight BYOD</td></tr>
+    </tbody>
+  </table>
+
+  <h3 id="android-android-enterprise">Android: Android Enterprise</h3>
+
+  <p>Android splits management into work profile (BYOD) and fully managed (corporate-owned). Work profile creates an isolated container alongside the personal profile: the organization manages only the work partition, the personal side is untouched. Fully managed enrollment wipes the device and gives the organization complete control.</p>
+
+  <table>
+    <thead><tr><th>Profile</th><th>Scope</th><th>Data separation</th><th>Typical use</th></tr></thead>
+    <tbody>
+      <tr><td>Work profile</td><td>Work apps only</td><td>Full (separate encryption key)</td><td>BYOD</td></tr>
+      <tr><td>Fully managed</td><td>Entire device</td><td>N/A (single owner)</td><td>Corporate dedicated</td></tr>
+      <tr><td>Dedicated device</td><td>Kiosk mode</td><td>N/A</td><td>Single-purpose hardware</td></tr>
+      <tr><td>Corporate-owned work profile</td><td>Entire device + work profile</td><td>Work and personal separated</td><td>Corporate personal use</td></tr>
+    </tbody>
+  </table>
+
+  <h3 id="windows-server-azure-arc">Windows Server: Azure Arc</h3>
+
+  <p>Servers are not enrolled in Intune directly. Instead, they are onboarded to Azure Arc, which installs the Connected Machine Agent on the server. This agent registers the server as an Arc-enabled resource in Azure, enables Azure Policy assignment, enables Defender for Cloud, and on Windows Server 2025+ enables a subset of Intune policies directly.</p>
+
+  <p>Arc onboarding requires running an installation script with local admin rights. The agent communicates outbound over HTTPS to Azure endpoints; no inbound firewall rules required. The implication: Arc-enrolled servers are reachable from Azure regardless of whether they're on-premises, in a datacenter, or in another cloud. Tenant security is therefore the security perimeter for all Arc-managed infrastructure.</p>
+
+  <h2 id="the-identity-layer-entra-id-ad-and-hybrid-join">The Identity Layer: Entra ID, AD, and Hybrid Join</h2>
+
+  <p>To understand why management behaves differently on different devices, you need to understand where Intune sits relative to the two identity systems it depends on.</p>
+
+  <p><strong>Active Directory</strong> has existed since Windows 2000. It runs on domain controllers inside the organization's network, handles authentication via Kerberos, and distributes Group Policy. AD domain join is network-bound: the device needs to reach a domain controller to authenticate.</p>
+
+  <p><strong>Entra ID</strong> is Microsoft's cloud identity platform. Authentication is over HTTPS to Microsoft's global endpoints, meaning it works from any network with internet access. Intune, Microsoft 365, and Azure all use Entra ID as their identity foundation.</p>
+
+  <p>Most large organizations run both. A hybrid-joined device is simultaneously joined to on-premises AD and Entra ID, managed by both GPO and Intune, authenticated via both Kerberos and OAuth 2.0.</p>
+
+  <table>
+    <thead><tr><th>Join state</th><th>AD joined</th><th>Entra joined</th><th>MDM manageable</th><th>GPO applies</th></tr></thead>
+    <tbody>
+      <tr><td>Workgroup</td><td>No</td><td>No</td><td>Via manual enroll only</td><td>No</td></tr>
+      <tr><td>AD joined only</td><td>Yes</td><td>No</td><td>Via manual enroll</td><td>Yes</td></tr>
+      <tr><td>Entra joined</td><td>No</td><td>Yes</td><td>Yes (cloud-native)</td><td>No</td></tr>
+      <tr><td>Hybrid joined</td><td>Yes</td><td>Yes (via sync)</td><td>Yes</td><td>Yes</td></tr>
+      <tr><td>Entra registered</td><td>No</td><td>Partial</td><td>Via user enrollment</td><td>No</td></tr>
+    </tbody>
+  </table>
+
+  <Diagram caption="Identity relationships across the Microsoft stack. AD and Entra ID maintain synchronized identity stores via Entra Connect. GPO applies through the domain controller (network-bound). Intune applies through Entra ID (internet-native). On a hybrid-joined device, both management channels are active simultaneously." alt="Identity relationships diagram">
+    <img src="/diagrams/Identity-relationships.svg" style="max-width: 100%; height: auto;" />
+  </Diagram>
+
+  <Callout variant="definition" title="Hybrid join">
+    Hybrid join is the state where a device has both an AD computer account and an Entra ID device object, synchronized via Entra Connect. It receives Group Policy from domain controllers and MDM policy from Intune simultaneously. Policy conflict resolution determines which setting wins when both systems configure the same value: GPO writes to <code>HKLM\SOFTWARE\Policies\</code>, MDM writes to <code>HKLM\SOFTWARE\Microsoft\PolicyManager\</code>, and the MDM agent's merge behavior determines precedence.
+  </Callout>
+
+  <h2 id="sccm-mecm-and-co-management">SCCM / MECM and Co-Management</h2>
+
+  <p>Microsoft Endpoint Configuration Manager (MECM, formerly SCCM) is the on-premises PC management platform. Where Intune is cloud-native and relatively lightweight, MECM is deeply powerful and deeply complex: it handles OS deployment with full imaging pipelines, software distribution with dependency chains, patch management via WSUS integration, and deep hardware inventory.</p>
+
+  <p>Co-management is the state where a Windows device runs both the MECM client and Intune enrollment simultaneously. Each management workload (software updates, compliance policy, resource access, endpoint protection) can be independently assigned to either MECM or Intune. When a workload is assigned to Intune, the MECM client stops managing it and defers to the MDM channel.</p>
+
+  <table>
+    <thead><tr><th>Workload</th><th>Owner options</th></tr></thead>
+    <tbody>
+      <tr><td>Compliance policies</td><td>MECM or Intune</td></tr>
+      <tr><td>Device configuration</td><td>MECM or Intune</td></tr>
+      <tr><td>Endpoint Protection</td><td>MECM or Intune</td></tr>
+      <tr><td>Resource access (VPN, Wi-Fi, certs)</td><td>MECM or Intune</td></tr>
+      <tr><td>Windows Update policies</td><td>MECM or Intune</td></tr>
+      <tr><td>Client apps</td><td>MECM or Intune</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="why-reinstalling-the-os-doesnt-help">Why Reinstalling the OS Doesn't Help</h2>
+
+  <p>Three independent mechanisms make OS reinstallation insufficient to escape management on a corporate device. They operate at different hardware layers and none of them are affected by a disk wipe.</p>
+
+  <h3 id="the-autopilot-hash">The Autopilot Hash</h3>
+
+  <p>Covered above. The hardware hash is registered in the tenant against the physical device. A clean reinstall triggers OOBE, OOBE calls Autopilot, and the device re-enrolls. The hash predates the OS installation and survives its removal.</p>
+
+  <h3 id="tpm-bound-enrollment-certificates">TPM-Bound Enrollment Certificates</h3>
+
+  <p>On TPM-capable devices, the enrollment certificate's private key is generated inside the TPM using <code>TPM2_Create</code>. The key is marked non-exportable: it never exists in RAM or on disk outside the TPM's hardware boundary. The OS holds a reference to the key, not the key itself. A disk wipe clears the reference. The key persists in the TPM.</p>
+
+  <p>This has two consequences. An attacker who gains physical access to the device cannot steal the enrollment credential by reading the disk. And a user who reinstalls Windows cannot destroy the enrollment credential; re-enrollment after reinstall uses the same TPM-backed key material.</p>
+
+  <Diagram caption="TPM-bound enrollment certificate storage. The OS certificate store holds a reference to the private key. The key itself is generated and stored inside the TPM using TPM2_Create and never leaves the hardware boundary. A disk wipe clears the reference but not the key. The UEFI NVRAM layer persists DFCI policy state separately." alt="TPM enrollment certificate hierarchy">
+    <img src="/diagrams/tpm-enrollment-cert.svg" style="max-width: 100%; height: auto;" />
+  </Diagram>
+
+  <h3 id="dfci-device-firmware-configuration-interface">DFCI: Device Firmware Configuration Interface</h3>
+
+  <p>DFCI is a management interface between Intune and the device's UEFI firmware, supported on hardware from Surface, Dell, HP, and Lenovo with appropriate firmware. Via DFCI, an MDM admin can disable booting from external media, disable the camera and microphone at firmware level, lock BIOS settings, and enforce Secure Boot, all written to UEFI NVRAM, not to disk.</p>
+
+  <p>These policies survive OS reinstalls because they live in firmware. Installing Linux instead of Windows doesn't help: if Secure Boot is enforced via DFCI with a specific key set, the device refuses to boot any unsigned OS. The management surface exists below any operating system.</p>
+
+  <h2 id="memory-and-storage-what-gets-written-where">Memory and Storage: What Gets Written Where</h2>
+
+  <p>Understanding where management state lives at the hardware level matters for both security analysis and troubleshooting. The layers are distinct: UEFI NVRAM, the TPM chip, the system partition, and the data partition each hold different types of management state, with different persistence characteristics.</p>
+
+  <Diagram caption="Storage layout on a managed Windows device. UEFI NVRAM and the TPM chip both survive disk wipes. The system partition is cleared on reinstall. The data partition is encrypted by BitLocker. Management state is distributed across all four layers, which is why disk-level interventions don't fully escape it." alt="Storage layout diagram">
+    <img src="/diagrams/storage-layout.svg" style="max-width: 100%; height: auto;" />
+  </Diagram>
+
+  <h3 id="tpm-platform-configuration-registers">TPM Platform Configuration Registers</h3>
+
+  <p>The TPM maintains 24 Platform Configuration Registers (PCRs) on TPM 2.0 that record measurements of the boot sequence. Each PCR accumulates measurements by hashing new values together with old ones; once written, a PCR value can only change by extending it. BitLocker uses PCR values to seal the Volume Master Key: the key is only released if the PCR values match what they were when BitLocker was enabled.</p>
+
+  <table>
+    <thead><tr><th>PCR</th><th>Measures</th></tr></thead>
+    <tbody>
+      <tr><td>0</td><td>UEFI firmware</td></tr>
+      <tr><td>1</td><td>UEFI firmware configuration</td></tr>
+      <tr><td>2</td><td>UEFI drivers and option ROMs</td></tr>
+      <tr><td>4</td><td>Boot manager</td></tr>
+      <tr><td>7</td><td>Secure Boot state</td></tr>
+      <tr><td>11</td><td>BitLocker access control</td></tr>
+      <tr><td>12</td><td>Highly volatile configuration</td></tr>
+    </tbody>
+  </table>
+
+  <p>If firmware is updated, Secure Boot is disabled, or a different bootloader is loaded, the PCR values change and the TPM refuses to release the BitLocker key. The drive stays encrypted. This is tamper-evident boot: the disk cannot be read without either knowing the recovery key or maintaining the exact boot configuration that was in place when BitLocker was enabled.</p>
+
+  <h3 id="bitlocker-key-hierarchy">BitLocker Key Hierarchy</h3>
+
+  <p>BitLocker uses a two-layer key structure. The Full Volume Encryption Key (FVEK) encrypts the actual disk sectors. The Volume Master Key (VMK) encrypts the FVEK. The VMK is protected by one or more protectors: the TPM, a recovery key, or a TPM+PIN combination. Any single protector can unlock the VMK, which then unlocks the FVEK, which then decrypts the disk.</p>
+
+  <Diagram caption="BitLocker key hierarchy. User data is encrypted by the FVEK. The FVEK is encrypted by the VMK. The VMK has multiple protectors; any one is sufficient to unlock it. The TPM protector seals the VMK against the PCR measurements. The recovery key is a 48-digit numeric backup escrowed to Entra ID. TPM+PIN requires active user authentication on resume." alt="BitLocker key hierarchy">
+    <img src="/diagrams/bitlocker-key-hierarchy.svg" style="max-width: 100%; height: auto;" />
+  </Diagram>
+
+  <p>The layering serves a purpose. The recovery key can unlock the drive without the TPM, useful when the device is being serviced or the TPM is cleared. The TPM can be cleared without losing data, because the recovery key provides an independent path. The FVEK never changes when the VMK protectors are updated; re-keying a protector doesn't require re-encrypting the entire disk.</p>
+
+  <h3 id="encryption-algorithms">Encryption Algorithms</h3>
+
+  <table>
+    <thead><tr><th>Context</th><th>Algorithm</th><th>Key length</th><th>Notes</th></tr></thead>
+    <tbody>
+      <tr><td>BitLocker default</td><td>AES-CBC</td><td>128-bit</td><td>Legacy compatibility mode</td></tr>
+      <tr><td>BitLocker via Intune policy</td><td>AES-XTS</td><td>256-bit</td><td>Recommended, Windows 10 1511+</td></tr>
+      <tr><td>MDM enrollment certificate</td><td>RSA</td><td>2048-bit</td><td>TLS channel to Intune</td></tr>
+      <tr><td>Entra ID tokens</td><td>RSA</td><td>2048-bit</td><td>JWT signing</td></tr>
+      <tr><td>MECM client auth</td><td>PKI (org CA)</td><td>2048-bit typically</td><td>Site-issued certificate</td></tr>
+      <tr><td>Arc agent channel</td><td>TLS 1.2/1.3</td><td>ECDHE + AES-256</td><td>Outbound HTTPS only</td></tr>
+    </tbody>
+  </table>
+
+  <h3 id="what-lives-in-ram-during-a-managed-session">What Lives in RAM During a Managed Session</h3>
+
+  <p>The FVEK must be in RAM for the CPU to decrypt data reads in real time. It is loaded into kernel memory when the volume is mounted and stays there for the duration of the session. It is not accessible to user-mode processes (it lives in kernel space), but it is present in physical RAM on a running system.</p>
+
+  <Diagram caption="RAM layout during a managed Windows session. The MDM agent, BitLocker driver, and TPM driver all run in kernel space. The FVEK is loaded into kernel memory when the volume is mounted and remains there while the device is running. This is the target of cold boot attacks: freezing RAM slows electron drift enough to read its contents after power-off." alt="RAM layout diagram">
+    <img src="/diagrams/ram-layout.svg" style="max-width: 100%; height: auto;" />
+  </Diagram>
+
+  <p>This is the target of cold boot attacks. Freezing the RAM modules (literally, with compressed air) slows electron drift enough that the contents can be read after the device is powered off and the RAM is transplanted to an attacker-controlled machine. The FVEK is present in that memory. The attack is defeated by memory encryption (AMD SME/SEV or Intel TME, which encrypt RAM contents in hardware) and by configuring BitLocker to require a PIN on resume from sleep, forcing re-authentication before the key is loaded.</p>
+
+  <Callout variant="warning">
+    A device left in sleep mode with BitLocker and no PIN requirement has its FVEK loaded in RAM and its RAM contents readable via cold boot attack if physical access is obtained. This is not a theoretical vulnerability; it has been demonstrated against production hardware. Intune policy can enforce "Require additional authentication at startup" to require a PIN, which destroys the FVEK from RAM on sleep and requires re-entry before the next boot.
+  </Callout>
+
+  <h2 id="mdm-vs-rootkit-the-honest-comparison">MDM vs Rootkit: The Honest Comparison</h2>
+
+  <p>This comparison makes vendors uncomfortable. It is worth making precisely.</p>
+
+  <p>A rootkit is malware that establishes persistent, privileged access to a system below the user's visibility and control, survives OS reinstalls, and can execute arbitrary code and exfiltrate data. A fully deployed corporate MDM configuration, using Autopilot, TPM-backed certificates, DFCI policies, and Scripts &amp; Remediation, compares like this:</p>
+
+  <table>
+    <thead><tr><th>Capability</th><th>Rootkit</th><th>Corporate MDM (full deployment)</th></tr></thead>
+    <tbody>
+      <tr><td>Persists across OS reinstall</td><td>Often</td><td>Yes (Autopilot + TPM)</td></tr>
+      <tr><td>Survives disk wipe</td><td>Sometimes (firmware rootkits)</td><td>Yes (DFCI + TPM)</td></tr>
+      <tr><td>Executes arbitrary code as SYSTEM</td><td>Yes</td><td>Yes (Scripts &amp; Remediation runs PowerShell as SYSTEM)</td></tr>
+      <tr><td>Exfiltrates device data</td><td>Yes</td><td>Yes (inventory, location, installed apps)</td></tr>
+      <tr><td>Blocks user removal</td><td>Yes</td><td>Yes (corporate enrollment lock)</td></tr>
+      <tr><td>Operates below OS level</td><td>Sometimes (bootkits)</td><td>Yes (DFCI writes to UEFI NVRAM)</td></tr>
+      <tr><td>Legitimate certificate chain</td><td>No</td><td>Yes (Microsoft-issued)</td></tr>
+      <tr><td>Legal authorization</td><td>No</td><td>Yes (employer owns device)</td></tr>
+      <tr><td>User disclosure</td><td>No</td><td>Nominally yes</td></tr>
+    </tbody>
+  </table>
+
+  <p>The differences are legal and organizational, not technical. A corporate MDM stack with full capabilities has more persistent access to a device than most malware. The trust model is: you trust your employer, your employer trusts Microsoft, Microsoft issues the certificates. RBAC misconfiguration in this context is not a minor finding; it is a misconfiguration in a system with rootkit-level access to every device in scope.</p>
+
+  <Callout variant="insight">
+    Scripts &amp; Remediation, the Intune feature that runs PowerShell detection and remediation scripts on a schedule, executes as SYSTEM on every device in the assigned group. This is remote code execution on demand, scoped only by RBAC. Access to this feature should be treated with the same seriousness as access to a domain controller. At Velferdsetaten, requesting Scripts &amp; Remediation access required escalation through Sopra Steria, the managed service provider, precisely because of this.
+  </Callout>
+
+  <h2 id="why-an-attacker-cant-easily-weaponize-mdm-and-where-they-can">Why an Attacker Can't Easily Weaponize MDM (and Where They Can)</h2>
+
+  <h3 id="the-single-enrollment-constraint">The Single Enrollment Constraint</h3>
+
+  <p>Windows enforces one MDM enrollment per device. An attacker who gains access to an already-enrolled device cannot silently add a second enrollment: unenrolling the existing one generates compliance alerts and is visible in the tenant. This is a meaningful structural protection.</p>
+
+  <h3 id="credential-requirement">Credential Requirement</h3>
+
+  <p>Enrolling into a tenant requires valid Entra ID credentials for that tenant. Social engineering is the most realistic attack path: an attacker who can convince a user to enter credentials for an attacker-controlled tenant gains enrollment.</p>
+
+  <h3 id="the-rogue-tenant-attack">The Rogue Tenant Attack</h3>
+
+  <p>The dangerous inversion is <strong>rogue MDM enrollment on unmanaged personal devices</strong>. If an attacker creates an Entra ID tenant and convinces a user to enroll their personal device (framed as a work access requirement, a software distribution portal, or a "security compliance" step), they gain a persistent management channel backed by a legitimate Microsoft certificate. The attacker can push apps, configuration, and scripts, invoke remote wipe, and collect device inventory. This is a corporate-grade persistent access mechanism delivered through normal Microsoft tooling, requiring no exploit and no malware.</p>
+
+  <p>The attack is underreported because it requires social engineering. It is particularly effective against users who are already accustomed to employer-driven enrollment requests.</p>
+
+  <Callout variant="warning">
+    Before enrolling a personal device into any MDM tenant, even one that appears to be from your employer, verify the tenant ID directly with your IT department through a known-good channel. The enrollment screen shows the tenant name, but tenant names are not verified: an attacker can name their tenant anything.
+  </Callout>
+
+  <h3 id="arc-and-the-server-attack-surface">Arc and the Server Attack Surface</h3>
+
+  <p>Arc-enrolled servers communicate outbound to Azure. If the Azure tenant is compromised, the attacker has management access to every Arc-enrolled server via Azure Policy and the Connected Machine Agent's run command feature. For organizations running hybrid infrastructure with Arc, the cloud tenant is the security perimeter for on-premises servers. A tenant-level breach is equivalent to domain compromise.</p>
+
+  <h2 id="enrollment-errors-and-diagnostics">Enrollment Errors and Diagnostics</h2>
+
+  <h3 id="windows-enrollment">Windows Enrollment</h3>
+
+  <table>
+    <thead><tr><th>Error code</th><th>Meaning</th><th>Fix</th></tr></thead>
+    <tbody>
+      <tr><td>0x80180026</td><td>MDM enrollment not allowed for user</td><td>Assign Intune license; check MDM user scope in Entra ID</td></tr>
+      <tr><td>0x80180014</td><td>MDM authority not configured</td><td>Set MDM authority in Intune tenant admin</td></tr>
+      <tr><td>0x80CF0437</td><td>Clock skew (device time differs from server by more than 5 minutes)</td><td>Sync device clock via NTP</td></tr>
+      <tr><td>0x80070774</td><td>Enrollment server unreachable</td><td>Check firewall rules for Intune service endpoints</td></tr>
+      <tr><td>0x800705B4</td><td>Timeout during enrollment</td><td>Usually transient, retry; check proxy configuration</td></tr>
+      <tr><td>0x80180001</td><td>Device already enrolled</td><td>Unenroll first; check and clear Enrollments registry key</td></tr>
+    </tbody>
+  </table>
+
+  <h3 id="autopilot">Autopilot</h3>
+
+  <table>
+    <thead><tr><th>Issue</th><th>Likely cause</th><th>Fix</th></tr></thead>
+    <tbody>
+      <tr><td>Hash not found</td><td>Hash not uploaded or uploaded to wrong tenant</td><td>Re-run <code>Get-WindowsAutoPilotInfo</code>, re-upload to correct tenant</td></tr>
+      <tr><td>Profile not assigned</td><td>No Autopilot profile targeting the device</td><td>Assign profile to All Devices or specific device group</td></tr>
+      <tr><td>Enrollment Status Page hangs</td><td>App or policy deployment stalling ESP</td><td>Check ESP blocking apps; review Intune assignment filters</td></tr>
+      <tr><td>Device joins wrong tenant</td><td>Hash registered in multiple tenants</td><td>Remove hash from incorrect tenant</td></tr>
+    </tbody>
+  </table>
+
+  <h3 id="hybrid-join">Hybrid Join</h3>
+
+  <p>Check status with <code>dsregcmd /status</code>. Key fields:</p>
+
+  <pre><code>AzureAdJoined      : YES   ← Entra join complete
+DomainJoined       : YES   ← AD join complete
+WorkplaceJoined    : NO    ← should be NO on a corporate device
+TenantId           : [guid]
+DeviceAuthStatus   : SUCCESS</code></pre>
+
+  <p>If <code>AzureAdJoined</code> shows <code>NO</code> on a device that should be hybrid-joined: Entra Connect may not have synced the computer object yet (default interval is 30 minutes), or the device hasn't run <code>dsregcmd /join</code> or rebooted since domain join.</p>
+
+  <h3 id="tpm-attestation-failures">TPM Attestation Failures</h3>
+
+  <p>TPM attestation failures during enrollment are almost always firmware-related. Steps: check TPM firmware version with <code>Get-Tpm</code> in PowerShell, compare against the OEM's minimum required version for attestation, update TPM firmware via the OEM's update tool (Dell Command Update, HP BIOS Update, Lenovo System Update). If attestation still fails after a firmware update, <code>Clear-Tpm</code> is the last resort: it destroys all TPM-bound keys, requires the BitLocker recovery key to regain access to encrypted volumes, and forces re-enrollment.</p>
+
+  <h3 id="ios-common-failures">iOS: Common Failures</h3>
+
+  <table>
+    <thead><tr><th>Issue</th><th>Cause</th><th>Fix</th></tr></thead>
+    <tbody>
+      <tr><td>Push certificate expired</td><td>Apple MDM Push Cert expires annually</td><td>Renew in Intune using the same Apple ID used to create it</td></tr>
+      <tr><td>Device not supervised</td><td>Policy requires supervision</td><td>Re-enroll via ABM or Apple Configurator 2</td></tr>
+      <tr><td>ABM server token expired</td><td>ABM sync token has a one-year expiry</td><td>Renew token in Intune → Enrollment → Apple → ABM</td></tr>
+    </tbody>
+  </table>
+
+  <h2 id="the-policy-pipeline">The Policy Pipeline</h2>
+
+  <p>Once enrolled, Windows devices check in with Intune approximately every 8 hours. iOS and Android also default to 8-hour intervals but respond to push notifications (APNs for iOS, FCM for Android) that trigger an immediate check-in. Arc-enrolled servers maintain a continuous heartbeat.</p>
+
+  <Diagram caption="Policy flow from admin action to device application. Entra ID group membership gates policy delivery. Platform-specific push services (WNS for Windows, APNs for iOS, FCM for Android) trigger immediate check-in rather than waiting for the next scheduled interval. Each policy type (configuration, compliance, app deployment, script) is applied by the MDM agent and reported back to Intune individually." alt="Policy flow diagram">
+    <img src="/diagrams/policy-flow.svg" style="max-width: 100%; height: auto;" />
+  </Diagram>
+
+  <p>Policy is applied through Configuration Service Providers (CSPs), an abstraction layer that maps OMA-URI policy paths to registry keys, services, and system settings. When Intune sends a policy, it sends an OMA-URI and a value. The MDM agent looks up the CSP, which writes the setting to the correct location. This is why MDM policy and Group Policy can coexist on a hybrid-joined device without direct path conflicts: GPO writes under <code>HKLM\SOFTWARE\Policies\</code>, MDM writes under <code>HKLM\SOFTWARE\Microsoft\PolicyManager\</code>. Both paths may hold values for the same logical setting simultaneously, and merge behavior determines which wins.</p>
+
+  <table>
+    <thead><tr><th>Device type</th><th>Default check-in interval</th><th>Push-triggered minimum</th></tr></thead>
+    <tbody>
+      <tr><td>Windows</td><td>8 hours</td><td>~5 minutes via WNS</td></tr>
+      <tr><td>iOS</td><td>8 hours</td><td>~1 minute via APNs</td></tr>
+      <tr><td>Android</td><td>8 hours</td><td>~5 minutes via FCM</td></tr>
+      <tr><td>macOS</td><td>8 hours</td><td>~5 minutes</td></tr>
+      <tr><td>Windows Server (Arc)</td><td>Continuous heartbeat</td><td>Near-real-time</td></tr>
+    </tbody>
+  </table>
+
+</ChapterLayout>

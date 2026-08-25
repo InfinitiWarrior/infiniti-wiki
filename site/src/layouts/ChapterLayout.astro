@@ -45,7 +45,7 @@ const toc = headings.filter(h => h.depth === 2 || h.depth === 3)
 
     <aside class="sidebar">
       <div class="sidebar-inner">
-        <div class="sidebar-part">Part {chapter < 10 ? '0' + Math.ceil(chapter / 3) : Math.ceil(chapter / 3)} — {part}</div>
+        <div class="sidebar-part">Part {chapter < 10 ? '0' + Math.ceil(chapter / 3) : Math.ceil(chapter / 3)} · {part}</div>
         <div class="sidebar-chapter-num">{String(chapter).padStart(2, '0')}</div>
         <div class="sidebar-chapter-title">{title}</div>
 
