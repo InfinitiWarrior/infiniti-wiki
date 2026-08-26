@@ -62,7 +62,7 @@ const headings = [
 
   <p>This is the spine the rest of the chapter hangs off. Every stage below is a place an event can be delayed, dropped, malformed, or simply never generated at all, and a detection rule is only ever as good as everything that happened to the data before the rule ran. Treat each subsection as one hop in that chain.</p>
 
-  <Diagram caption="Placeholder: end to end pipeline from log generation through response, with the approximate latency contribution of each stage." alt="SIEM pipeline stages from source to alert">
+  <Diagram alt="SIEM pipeline stages from source to alert">
     <img src="/diagrams/siem-pipeline-overview.svg" style="max-width: 100%; height: auto;" />
   </Diagram>
 
@@ -84,7 +84,7 @@ const headings = [
 
   <h3 id="collection-and-ingestion">Collection and Ingestion</h3>
 
-  <Diagram caption="Placeholder: forwarder queue behavior under normal load versus a log storm, and where blocking or dropping kicks in." alt="Forwarder queue backpressure diagram">
+  <Diagram alt="Forwarder queue backpressure diagram">
     <img src="/diagrams/siem-collection-backpressure.svg" style="max-width: 100%; height: auto;" />
   </Diagram>
 
@@ -117,7 +117,7 @@ const headings = [
 
   <p>Timestamps carry an equivalent but distinct risk, because there is no single universal format in the wild: sources send local time with no time zone marker, UTC, epoch seconds, epoch milliseconds, or genuinely ambiguous strings that could be parsed more than one valid way depending on locale assumptions. A timestamp parsing error of even a few hours is enough to break any correlation rule that depends on temporal proximity, a rule looking for a login followed by a suspicious process launch "within 5 minutes" simply never fires if one of the two events was time-shifted by more than that window during parsing. NTP synchronization across every log source and the SIEM's own infrastructure is not optional hygiene, it is a hard dependency of the entire correlation layer, and a source whose clock has drifted, even without any parsing bug at all, produces exactly the same failure: events that actually happened close together in real time land far apart once they're normalized against a clock that disagrees with everything else.</p>
 
-  <Diagram caption="Placeholder: how CIM and ECS each normalize divergent source fields into a common schema, and where original raw fields are preserved." alt="CIM and ECS field normalization diagram">
+  <Diagram alt="CIM and ECS field normalization diagram">
     <img src="/diagrams/siem-cim-ecs-normalization.svg" style="max-width: 100%; height: auto;" />
   </Diagram>
 
@@ -127,7 +127,7 @@ const headings = [
 
   <h3 id="storage-and-indexing">Storage and Indexing</h3>
 
-  <Diagram caption="Placeholder: hot to warm to cold to frozen rollover for Splunk buckets and Elasticsearch tiered data nodes side by side." alt="Storage tier rollover diagram">
+  <Diagram alt="Storage tier rollover diagram">
     <img src="/diagrams/siem-storage-tier-rollover.svg" style="max-width: 100%; height: auto;" />
   </Diagram>
 
@@ -143,7 +143,7 @@ const headings = [
 
   <h3 id="correlation-and-detection">Correlation and Detection</h3>
 
-  <Diagram caption="Placeholder: detection rule lifecycle from draft through alert-only testing, tuning, production, and scheduled review." alt="Detection rule lifecycle diagram">
+  <Diagram alt="Detection rule lifecycle diagram">
     <img src="/diagrams/siem-detection-rule-lifecycle.svg" style="max-width: 100%; height: auto;" />
   </Diagram>
 
@@ -165,7 +165,7 @@ const headings = [
 
   <p>Analysts working in genuinely high-volume environments routinely see 500 to 1000 or more alerts in a single day, and industry research from Ponemon and SANS consistently puts the share of alerts that never receive any investigation at all somewhere between 25 and 50 percent, not because analysts are careless but because the volume structurally exceeds what a finite team can review. Triage priority in a well-run program is a function of three inputs multiplied together, severity, confidence, and asset criticality, and the resulting number decides where an alert lands in the investigation queue. The split between what can be safely automated, auto-closing alerts that match a known false positive pattern, auto-enriching an alert with context before a human ever sees it, versus what genuinely still requires a human's judgment, a novel pattern nobody has seen before, or any alert touching a high-value target, is the single biggest structural determinant of whether a SOC is sustainable for the people staffing it or is quietly burning them out.</p>
 
-  <Diagram caption="Placeholder: Notable Event state lifecycle in Splunk ES, New through Closed, with urgency inputs shown at each transition." alt="Notable event state lifecycle diagram">
+  <Diagram alt="Notable event state lifecycle diagram">
     <img src="/diagrams/siem-notable-event-lifecycle.svg" style="max-width: 100%; height: auto;" />
   </Diagram>
 
@@ -175,7 +175,7 @@ const headings = [
 
   <h3 id="investigation-and-enrichment">Investigation and Enrichment</h3>
 
-  <Diagram caption="Placeholder: the pivot from alert to entity to enumerated activity to scope determination." alt="Investigation pivot methodology diagram">
+  <Diagram alt="Investigation pivot methodology diagram">
     <img src="/diagrams/siem-investigation-pivot.svg" style="max-width: 100%; height: auto;" />
   </Diagram>
 
@@ -187,7 +187,7 @@ const headings = [
 
   <h3 id="response-and-orchestration-soar">Response and Orchestration: SOAR</h3>
 
-  <Diagram caption="Placeholder: SOAR playbook architecture from trigger through decision tree, actions, approval gate, validation, and closure." alt="SOAR playbook architecture diagram">
+  <Diagram alt="SOAR playbook architecture diagram">
     <img src="/diagrams/siem-soar-playbook-architecture.svg" style="max-width: 100%; height: auto;" />
   </Diagram>
 
@@ -238,7 +238,7 @@ const headings = [
     When a Splunk bucket ages past the warm tier, it freezes: by default Splunk simply deletes it, but if an archive path is configured, the bucket gets copied there first, typically with its <code>tsidx</code> index files stripped out and only the compressed raw data kept, since the index files are the bulk of a bucket's size and can be rebuilt later. That frozen archive is not searchable in place. Thawing means manually or scriptedly copying the archived bucket back into Splunk's <code>thaweddb</code> directory and letting Splunk rebuild the <code>tsidx</code> files against it, which is what actually makes it searchable again. It is a real operational step, not a config flag, and it is why pulling a specific date range back out of frozen storage during an investigation takes real time rather than being instant.
   </Callout>
 
-  <Diagram caption="Placeholder: Splunk and Elastic storage tier comparison, including Elastic's frozen tier on object storage versus Splunk's thaw requirement." alt="Splunk and Elastic storage tier comparison diagram">
+  <Diagram alt="Splunk and Elastic storage tier comparison diagram">
     <img src="/diagrams/siem-splunk-vs-elastic-architecture.svg" style="max-width: 100%; height: auto;" />
   </Diagram>
 
@@ -246,7 +246,7 @@ const headings = [
 
   <h3 id="cluster-architecture">Cluster Architecture</h3>
 
-  <Diagram caption="Placeholder: Splunk's indexer and search head cluster roles versus Elasticsearch's per-node role assignment, side by side." alt="Splunk and Elastic cluster architecture diagram">
+  <Diagram alt="Splunk and Elastic cluster architecture diagram">
     <img src="/diagrams/siem-cluster-architecture.svg" style="max-width: 100%; height: auto;" />
   </Diagram>
 
@@ -264,7 +264,7 @@ const headings = [
 
   <h3 id="quantifying-end-to-end-latency">Quantifying End to End Latency</h3>
 
-  <Diagram caption="Placeholder: latency contributed by each pipeline stage from event occurrence to detection rule evaluation, best case versus under load." alt="End to end SIEM latency budget diagram">
+  <Diagram alt="End to end SIEM latency budget diagram">
     <img src="/diagrams/siem-latency-budget.svg" style="max-width: 100%; height: auto;" />
   </Diagram>
 
@@ -301,7 +301,7 @@ const headings = [
 
   <h3 id="the-data-gravity-problem">The Data Gravity Problem</h3>
 
-  <Diagram caption="Placeholder: why the platform holding the most historical telemetry becomes the hardest one to migrate away from." alt="SIEM and EDR data gravity diagram">
+  <Diagram alt="SIEM and EDR data gravity diagram">
     <img src="/diagrams/siem-edr-xdr-convergence.svg" style="max-width: 100%; height: auto;" />
   </Diagram>
 
@@ -321,7 +321,7 @@ const headings = [
 
   <h3 id="detection-as-code">Detection as Code</h3>
 
-  <Diagram caption="Placeholder: detection as code pipeline from Sigma rule draft through version control, CI validation, staging, and production deployment." alt="Detection as code feedback loop diagram">
+  <Diagram alt="Detection as code feedback loop diagram">
     <img src="/diagrams/siem-detection-engineering-loop.svg" style="max-width: 100%; height: auto;" />
   </Diagram>
 
@@ -351,7 +351,7 @@ const headings = [
 
   <p>For each of the major source categories below: what has to be explicitly enabled before it produces anything useful, the blind spots that persist even once it's properly configured, and the essential fields worth building real detections against rather than just collecting for volume.</p>
 
-  <Diagram caption="Placeholder: log source coverage by layer, host, cloud control plane, cloud data plane, and network, with the visibility gap between them." alt="Log source coverage by layer diagram">
+  <Diagram alt="Log source coverage by layer diagram">
     <img src="/diagrams/siem-log-source-coverage.svg" style="max-width: 100%; height: auto;" />
   </Diagram>
 
