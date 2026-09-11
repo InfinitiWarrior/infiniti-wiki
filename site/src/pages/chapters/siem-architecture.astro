@@ -54,7 +54,7 @@ const headings = [
 ]
 ---
 
-<ChapterLayout title={title} description={description} headings={headings} part="Security Engineering" chapter={2} prev={{ part: 1, chapter: 1, title: 'Microsoft Device Management: Internals', description: '', slug: 'mdm-internals' }}>
+<ChapterLayout title={title} description={description} headings={headings} part="Security Engineering" chapter={2} prev={{ part: 1, chapter: 1, title: 'Microsoft Device Management: Internals', description: '', slug: 'mdm-internals' }} next={{ part: 1, chapter: 3, title: 'Malware Development: Internals', description: '', slug: 'malware-development' }}>
 
   <p>Most SIEM documentation explains how to write a search or build a dashboard. This chapter explains how the platform underneath that search actually works: how a log gets generated in the first place, how it survives, or doesn't, the trip to the indexer, what happens to it structurally once it lands, how a detection rule finds it, and what happens to a human analyst once the alert fires. Every stage is covered mechanically rather than at the marketing-slide level, and grounded throughout in how Splunk and Elastic specifically implement each one, because the two platforms' abstractions diverge in ways that matter operationally, not just syntactically. None of this is theoretical: every number, event ID, and default setting below is the kind of detail that determines whether a real detection rule fires on time, fires at all, or fires against data that already silently rotted somewhere upstream.</p>
 
